@@ -1248,15 +1248,16 @@ function tryDodge(){
   isDodging=true;dodgeTimer=200;
   dodgeCooldown=Math.max(400,1200*(1-upgrades.dodgeSpeed*0.2-sb.bonusDodge));
   const speed=6*(h.dodge||1);
-  const fwd={x:Math.sin(player.yaw),z:Math.cos(player.yaw)};
+  const fwdX=Math.sin(player.yaw), fwdZ=Math.cos(player.yaw);
+  const rgtX=Math.cos(player.yaw), rgtZ=-Math.sin(player.yaw);
   const mx=(joystickActive?joystickDelta.x:0)||(keys['KeyA']?-1:keys['KeyD']?1:0);
   const mz=(joystickActive?-joystickDelta.y:0)||(keys['KeyW']?1:keys['KeyS']?-1:0);
   const len=Math.sqrt(mx*mx+mz*mz)||1;
   const nx=mx/len,nz=mz/len;
   if(Math.abs(nx)+Math.abs(nz)>0.1){
-    player.velX=(nx*fwd.z+nz*fwd.x)*speed*2;
-    player.velZ=(-nx*fwd.x+nz*fwd.z)*speed*2;
-  } else {player.velX=-fwd.x*speed*2;player.velZ=-fwd.z*speed*2;}
+    player.velX=(nz*fwdX+nx*rgtX)*speed*2;
+    player.velZ=(nz*fwdZ+nx*rgtZ)*speed*2;
+  } else {player.velX=-fwdX*speed*2;player.velZ=-fwdZ*speed*2;}
   spawnParticleBurst(player.x,player.z,currentHero.color,8,3);
   lastDodgeTime=Date.now();
 
@@ -1586,10 +1587,10 @@ function update(dt){
   if(specialCooldown>0) specialCooldown-=dt;
   if(isCharging) chargeTime+=dt;
 
-  // Look joystick (mobile)
+  // Look joystick (mobile) — higher sensitivity so turning feels responsive
   if(lookJoystickActive&&gameState==='playing'){
-    player.yaw+=lookJoystickDelta.x*0.07*(dt/16);
-    pitchAngle=Math.max(-0.6,Math.min(0.6,pitchAngle+lookJoystickDelta.y*0.05*(dt/16)));
+    player.yaw += lookJoystickDelta.x * 0.12 * (dt/16);
+    pitchAngle = Math.max(-0.5, Math.min(0.5, pitchAngle + lookJoystickDelta.y * 0.06 * (dt/16)));
   }
 
   // Corruption
@@ -1608,16 +1609,19 @@ function update(dt){
   else{player.velX*=0.8;player.velZ*=0.8;}
   if(dodgeCooldown>0) dodgeCooldown-=dt;
 
-  // Movement
+  // Movement — camera-relative: forward = (sin yaw, cos yaw), right = (cos yaw, -sin yaw)
   if(!isDodging){
     const jx=joystickActive?joystickDelta.x:0,jz=joystickActive?-joystickDelta.y:0;
     const kx=keys['KeyA']?-1:keys['KeyD']?1:0,kz=keys['KeyW']?1:keys['KeyS']?-1:0;
-    const ix=jx||kx,iz=jz||kz;
+    const ix=jx||kx, iz=jz||kz;
     if(Math.abs(ix)+Math.abs(iz)>0.05){
       const len=Math.sqrt(ix*ix+iz*iz);
-      const cos=Math.cos(player.yaw),sin=Math.sin(player.yaw);
-      player.velX+=(ix/len*sin+iz/len*cos)*baseSpeed*0.25*dt/16;
-      player.velZ+=(ix/len*cos-iz/len*sin)*baseSpeed*0.25*dt/16;
+      const nx=ix/len, nz=iz/len;
+      // forward vector: (sin yaw, cos yaw); right vector: (cos yaw, -sin yaw)
+      const fwdX=Math.sin(player.yaw),  fwdZ=Math.cos(player.yaw);
+      const rgtX=Math.cos(player.yaw),  rgtZ=-Math.sin(player.yaw);
+      player.velX += (nz*fwdX + nx*rgtX)*baseSpeed*0.28*(dt/16);
+      player.velZ += (nz*fwdZ + nx*rgtZ)*baseSpeed*0.28*(dt/16);
       const curV=Math.sqrt(player.velX**2+player.velZ**2);
       if(curV>baseSpeed){player.velX=player.velX/curV*baseSpeed;player.velZ=player.velZ/curV*baseSpeed;}
     } else {player.velX*=0.85;player.velZ*=0.85;}
@@ -1774,55 +1778,94 @@ function render(){
   if(!player||!currentHero) return;
   const env=ENVIRONMENTS[currentEnv],h=currentHero;
   ctx.clearRect(0,0,W,H);
-  const horizonY=H*0.5+pitchAngle*H*0.6;
 
-  // Sky
-  ctx.fillStyle=env.skyColor;ctx.fillRect(0,0,W,horizonY);
-  for(let i=0;i<8;i++){
-    const x1=i*(W/4),x2=x1+W/4,x3=(x1+x2)/2,y3=horizonY*(0.3+0.4*(i%3)/2);
-    ctx.beginPath();ctx.moveTo(x1,0);ctx.lineTo(x2,0);ctx.lineTo(x3,y3);
-    ctx.fillStyle=env.skyAccent+(i%2?'44':'22');ctx.fill();
+  // horizonY shifts with pitch
+  const horizonY=H*0.5+pitchAngle*H*0.5;
+
+  // ── CAMERA CONSTANTS ──────────────────────────────────────────────────────
+  // Player looks along +Z when yaw=0.
+  // Camera-space transform: rotate world point by -yaw around Y axis.
+  //   camX =  dx*cos(yaw) + dz*sin(yaw)
+  //   camZ = -dx*sin(yaw) + dz*cos(yaw)
+  // camZ > 0  → in front of camera.
+  const CAM_COS = Math.cos(player.yaw);
+  const CAM_SIN = Math.sin(player.yaw);
+  const HFOV = W * 0.65;  // horizontal focal length in pixels — controls field-of-view width
+
+  // ── worldToScreen ─────────────────────────────────────────────────────────
+  // Returns screen {sx,sy,scale,rz} or null if behind camera.
+  function worldToScreen(wx,wz,wy=0){
+    const dx=wx-player.x, dz=wz-player.z;
+    const camX =  dx*CAM_COS + dz*CAM_SIN;
+    const camZ = -dx*CAM_SIN + dz*CAM_COS;
+    if(camZ<=0.5) return null;           // behind camera, skip
+    const sx = W/2 + (camX/camZ)*HFOV;
+    // wy>0 means above ground; pitch shifts horizon up/down
+    const pitchShift = pitchAngle * HFOV;
+    const sy = horizonY - (wy/camZ)*HFOV + pitchShift/camZ*0;
+    const scale = HFOV / camZ;
+    return {sx, sy, scale, rz:camZ, dist:Math.sqrt(dx*dx+dz*dz)};
   }
 
-  // Env sky detail
-  if(currentEnv==='water'){for(let i=0;i<6;i++){const x=i/6*W+W/12;const g=ctx.createLinearGradient(x,0,x+50,horizonY);g.addColorStop(0,'rgba(40,120,255,0.0)');g.addColorStop(0.5,'rgba(40,160,255,0.05)');g.addColorStop(1,'rgba(0,80,180,0.0)');ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+60,horizonY);ctx.lineTo(x-20,horizonY);ctx.fillStyle=g;ctx.fill();}}
-  else if(currentEnv==='fire'){const g=ctx.createLinearGradient(0,horizonY-120,0,horizonY);g.addColorStop(0,'transparent');g.addColorStop(1,'rgba(200,40,0,0.12)');ctx.fillStyle=g;ctx.fillRect(0,horizonY-120,W,120);}
-  else if(currentEnv==='air'){for(let i=0;i<5;i++){const ix=(i*0.21+0.08)*W+Math.sin(Date.now()/8000+i)*25,iy=horizonY*(0.2+i*0.12),iw=40+i*20,ih=12+i*5;ctx.beginPath();ctx.ellipse(ix,iy,iw,ih,0,0,Math.PI*2);ctx.fillStyle='rgba(100,140,200,0.15)';ctx.fill();ctx.beginPath();ctx.ellipse(ix,iy-ih*0.4,iw*0.9,ih*0.5,0,0,Math.PI);ctx.fillStyle='rgba(80,120,180,0.18)';ctx.fill();}}
-  else if(currentEnv==='earth'){for(let i=0;i<3;i++){const fy=horizonY*(0.4+i*0.2);const fg=ctx.createLinearGradient(0,fy,0,fy+40);fg.addColorStop(0,'rgba(40,80,20,0.1)');fg.addColorStop(1,'transparent');ctx.fillStyle=fg;ctx.fillRect(0,fy,W,40);}}
-
-  // Horizon glow
-  const hg=ctx.createLinearGradient(0,horizonY-80,0,horizonY+20);
+  // ── SKY ───────────────────────────────────────────────────────────────────
+  ctx.fillStyle=env.skyColor; ctx.fillRect(0,0,W,horizonY);
+  // Low-poly sky triangles — static decorative
+  for(let i=0;i<8;i++){
+    const x1=i*(W/4),x2=x1+W/4,x3=(x1+x2)/2,y3=horizonY*(0.25+0.4*(i%3)/2);
+    ctx.beginPath();ctx.moveTo(x1,0);ctx.lineTo(x2,0);ctx.lineTo(x3,y3);
+    ctx.fillStyle=env.skyAccent+(i%2?'40':'18');ctx.fill();
+  }
+  // Horizon glow band
+  const hg=ctx.createLinearGradient(0,horizonY-60,0,horizonY+30);
   hg.addColorStop(0,'transparent');hg.addColorStop(0.5,env.horizonColor+'cc');hg.addColorStop(1,'transparent');
-  ctx.fillStyle=hg;ctx.fillRect(0,horizonY-80,W,100);
+  ctx.fillStyle=hg; ctx.fillRect(0,horizonY-60,W,90);
 
-  // Ground — low poly triangulated (proven reference approach)
-  ctx.fillStyle=env.groundColor;ctx.fillRect(0,horizonY,W,H-horizonY);
-  for(let col=0;col<12;col++){for(let row=0;row<5;row++){
-    const gx=col*(W/6)-W/12,gy=horizonY+row*((H-horizonY)/5);
-    const gx2=gx+W/6,gy2=gy+(H-horizonY)/5;
+  // ── GROUND ────────────────────────────────────────────────────────────────
+  ctx.fillStyle=env.groundColor; ctx.fillRect(0,horizonY,W,H-horizonY);
+
+  // Perspective grid — lines project from player position into world.
+  // We draw radial lines from vanishing point + depth rows.
+  // This rotates visually with yaw giving proper 3-D feel.
+  const vp = {x:W/2, y:horizonY}; // vanishing point
+  const envElColor=HEROES.find(x=>x.element===env.element)?.color||'#ffffff';
+  ctx.strokeStyle=envElColor+'28'; ctx.lineWidth=1;
+
+  // Radial (angular) lines — 16 spokes around 360°, projected through camera
+  for(let spoke=0;spoke<16;spoke++){
+    const worldAngle = player.yaw + (spoke/16)*Math.PI*2;
+    const farX = player.x + Math.cos(worldAngle)*800;
+    const farZ = player.z + Math.sin(worldAngle)*800;
+    const s = worldToScreen(farX, farZ, 0);
+    if(!s) continue;
+    // Clamp spoke endpoint to screen bounds
+    ctx.beginPath(); ctx.moveTo(vp.x, vp.y); ctx.lineTo(s.sx, H+20); ctx.stroke();
+  }
+  // Depth rows — circles at fixed world distances, projected as horizontal lines
+  ctx.strokeStyle=envElColor+'20';
+  for(let d=1;d<=12;d++){
+    const worldDist=d*60;
+    const camZ=worldDist; // straight ahead
+    const sy=horizonY + HFOV/camZ * 1; // approximate row Y
+    if(sy>H) break;
+    const halfW = (HFOV/camZ)*worldDist*1.8;
+    ctx.beginPath(); ctx.moveTo(W/2-halfW,sy); ctx.lineTo(W/2+halfW,sy); ctx.stroke();
+  }
+
+  // Fog overlay on ground
+  if(env.fogColor){
+    const fg=ctx.createLinearGradient(0,horizonY,0,H);
+    fg.addColorStop(0,'transparent'); fg.addColorStop(1,env.fogColor+'dd');
+    ctx.fillStyle=fg; ctx.fillRect(0,horizonY,W,H-horizonY);
+  }
+  // Low-poly ground tiling
+  for(let col=0;col<10;col++){for(let row=0;row<4;row++){
+    const gx=col*(W/5)-W/10, gy=horizonY+row*((H-horizonY)/4);
+    const gx2=gx+W/5, gy2=gy+(H-horizonY)/4;
     ctx.beginPath();
     if((col+row)%2===0){ctx.moveTo(gx,gy);ctx.lineTo(gx2,gy);ctx.lineTo(gx,gy2);}
     else{ctx.moveTo(gx2,gy);ctx.lineTo(gx2,gy2);ctx.lineTo(gx,gy2);}
-    ctx.fillStyle=row%2===0?env.groundColor+'aa':env.bgColor+'66';ctx.fill();
+    ctx.fillStyle=row%2===0?env.groundColor+'55':env.bgColor+'33'; ctx.fill();
   }}
-  // Ground grid lines
-  const envElColor=HEROES.find(x=>x.element===env.element)?.color||'#ffffff';
-  ctx.strokeStyle=envElColor+'18';ctx.lineWidth=1;
-  for(let i=0;i<20;i++){const d=(i+1)*80,sy=horizonY+d*0.4;if(sy>H)break;const pw=W*(1+d*0.005);ctx.beginPath();ctx.moveTo(W/2-pw/2,sy);ctx.lineTo(W/2+pw/2,sy);ctx.stroke();}
-  if(env.fogColor){const fg=ctx.createLinearGradient(0,horizonY,0,H);fg.addColorStop(0,'transparent');fg.addColorStop(1,env.fogColor+'cc');ctx.fillStyle=fg;ctx.fillRect(0,horizonY,W,H-horizonY);}
-
-  // World-to-screen projection
-  function worldToScreen(wx,wz,wy=0){
-    const dx=wx-player.x,dz=wz-player.z;
-    const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);
-    const rx=dx*cos-dz*sin,rz=dx*sin+dz*cos;
-    if(rz<=1) return null; // must be in front of camera
-    const fov=1.2;
-    const sx=W/2+(rx/rz)*W/fov;
-    const sy=horizonY-(wy/rz)*W/fov+(pitchAngle*W/rz)*0.3;
-    const scale=W/(rz*fov);
-    return{sx,sy,scale,dist:Math.sqrt(dx*dx+dz*dz),rz};
-  }
 
   // Dodge traps
   dodgeTraps.forEach(trap=>{
