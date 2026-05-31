@@ -1787,25 +1787,51 @@ function render(){
 
   // Ground
   ctx.fillStyle=env.groundColor;ctx.fillRect(0,horizonY,W,H-horizonY);
-  for(let col=0;col<12;col++){for(let row=0;row<5;row++){
-    const gx=col*W/6-W/12,gy=horizonY+row*(H-horizonY)/5,gx2=gx+W/6,gy2=gy+(H-horizonY)/5;
-    ctx.beginPath();
-    if((col+row)%2===0){ctx.moveTo(gx,gy);ctx.lineTo(gx2,gy);ctx.lineTo(gx,gy2);}
-    else{ctx.moveTo(gx2,gy);ctx.lineTo(gx2,gy2);ctx.lineTo(gx,gy2);}
-    ctx.fillStyle=row%2===0?env.groundColor+'aa':env.bgColor+'66';ctx.fill();
-  }}
+
+  // Perspective grid — converges to horizon, rotates with player yaw
   const envElColor=HEROES.find(x=>x.element===env.element)?.color||'#ffffff';
-  ctx.strokeStyle=envElColor+'18';ctx.lineWidth=1;
-  for(let i=0;i<20;i++){const d=(i+1)*80,sy=horizonY+d*0.4;if(sy>H)break;const pw=W*(1+d*0.005);ctx.beginPath();ctx.moveTo(W/2-pw/2,sy);ctx.lineTo(W/2+pw/2,sy);ctx.stroke();}
+  ctx.save();
+  ctx.strokeStyle=envElColor+'28';ctx.lineWidth=1;
+  const gridSpacing=120; // world units per grid line
+  const gridRange=10;    // how many lines each side
+  const fovG=0.8;
+  // Draw lines parallel to Z axis (receding lines left/right)
+  for(let i=-gridRange;i<=gridRange;i++){
+    // World X offset — align to grid snapped to player
+    const wx=Math.round((player.x)/gridSpacing)*gridSpacing+i*gridSpacing;
+    const nearZ=player.z+5,farZ=player.z+1200;
+    // Project near and far points
+    const pNear=(()=>{const dx=wx-player.x,dz=nearZ-player.z;const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);const rx=dx*cos+dz*sin,rz=-dx*sin+dz*cos;if(rz<=0.5)return null;return{sx:W/2+(rx/rz)*(W*fovG),sy:horizonY-(0/rz)*(W*fovG)};})();
+    const pFar=(()=>{const dx=wx-player.x,dz=farZ-player.z;const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);const rx=dx*cos+dz*sin,rz=-dx*sin+dz*cos;if(rz<=0.5)return null;return{sx:W/2+(rx/rz)*(W*fovG),sy:horizonY-(0/rz)*(W*fovG)};})();
+    if(!pNear||!pFar)continue;
+    ctx.beginPath();ctx.moveTo(pNear.sx,Math.max(horizonY,pNear.sy));ctx.lineTo(pFar.sx,horizonY);ctx.stroke();
+  }
+  // Draw lines parallel to X axis (lateral lines, spaced by distance)
+  for(let i=1;i<=12;i++){
+    const wz=Math.round((player.z+i*gridSpacing)/gridSpacing)*gridSpacing;
+    const leftX=player.x-gridRange*gridSpacing,rightX=player.x+gridRange*gridSpacing;
+    const pL=(()=>{const dx=leftX-player.x,dz=wz-player.z;const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);const rx=dx*cos+dz*sin,rz=-dx*sin+dz*cos;if(rz<=0.5)return null;return{sx:W/2+(rx/rz)*(W*fovG),sy:horizonY};})();
+    const pR=(()=>{const dx=rightX-player.x,dz=wz-player.z;const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);const rx=dx*cos+dz*sin,rz=-dx*sin+dz*cos;if(rz<=0.5)return null;return{sx:W/2+(rx/rz)*(W*fovG),sy:horizonY};})();
+    if(!pL||!pR)continue;
+    const sy=(()=>{const dz=wz-player.z,cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw),rz=-0*sin+dz*cos;if(rz<=0.5)return H;return horizonY+(H-horizonY)*Math.min(1,(W*fovG)/(rz*3));})();
+    ctx.beginPath();ctx.moveTo(Math.max(-W,pL.sx),Math.min(H,sy));ctx.lineTo(Math.min(W*2,pR.sx),Math.min(H,sy));ctx.stroke();
+  }
+  ctx.restore();
+
   if(env.fogColor){const fg=ctx.createLinearGradient(0,horizonY,0,H);fg.addColorStop(0,'transparent');fg.addColorStop(1,env.fogColor+'cc');ctx.fillStyle=fg;ctx.fillRect(0,horizonY,W,H-horizonY);}
 
-  // Projection
+  // Projection — correct camera-space transform
   function worldToScreen(wx,wz,wy=0){
     const dx=wx-player.x,dz=wz-player.z;
     const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);
-    const rx=dx*cos-dz*sin,rz=dx*sin+dz*cos;
-    if(rz<=0.1) return null;
-    const fov=1.2,sx=W/2+(rx/rz)*W/fov,sy=horizonY-(wy/rz)*W/fov+(pitchAngle*W/rz)*0.3,scale=W/(rz*fov);
+    // Standard 2D rotation into camera space
+    const rx=dx*cos+dz*sin;
+    const rz=-dx*sin+dz*cos;
+    if(rz<=0.5) return null; // behind or too close
+    const fov=0.8; // smaller = wider FOV
+    const sx=W/2+(rx/rz)*(W*fov);
+    const sy=horizonY-(wy/rz)*(W*fov);
+    const scale=(W*fov)/rz;
     return{sx,sy,scale,dist:Math.sqrt(dx*dx+dz*dz),rz};
   }
 
@@ -1906,9 +1932,9 @@ function render(){
   sortedEn.forEach(en=>{
     if(en.hp<=0) return;
     const s=worldToScreen(en.x,en.z,0);
-    if(!s||s.rz>800) return;
-    const bs=40*en.size*s.scale*0.4;
-    if(bs<2) return;
+    if(!s||s.rz>1400) return;
+    const bs=60*en.size*s.scale*0.5;
+    if(bs<1.5) return;
     const bx=s.sx,by=s.sy;
     const envMix=en.envTint;
     const baseColor=en.hitFlash>0?'#ffffff':en.color;
