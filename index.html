@@ -14,6 +14,9 @@ body{background:#050308;overflow:hidden;font-family:'Courier New',monospace;user
 #crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%);}
 #crosshair::after{height:2px;width:100%;top:50%;transform:translateY(-50%);}
 #hud{position:absolute;bottom:0;left:0;right:0;padding:16px 20px;display:flex;align-items:flex-end;justify-content:space-between;}
+.is-mobile #hud{bottom:222px;}
+.is-mobile #dodge-bar{bottom:232px;}
+.is-mobile #env-bonus{bottom:300px;}
 #health-bar{width:180px;}
 #health-label{font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:2px;margin-bottom:4px;}
 #health-track{height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;}
@@ -137,16 +140,23 @@ body{background:#050308;overflow:hidden;font-family:'Courier New',monospace;user
 .skill-node .sk-cost{font-size:9px;color:#c0a0ff;margin-top:2px;}
 #close-skilltree{padding:10px 30px;font-size:11px;letter-spacing:4px;border:1px solid rgba(192,160,255,0.3);background:transparent;color:#c0a0ff;cursor:pointer;font-family:inherit;pointer-events:all;}
 /* Mobile */
-#mobile-controls{position:fixed;bottom:0;left:0;right:0;z-index:20;pointer-events:none;display:none;height:160px;}
-#joystick-zone{position:absolute;bottom:16px;left:14px;width:130px;height:130px;pointer-events:all;}
-#joystick-base{width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);}
-#joystick-nub{position:absolute;top:40px;left:40px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.2);}
-#mobile-btns{pointer-events:all;}
-.mob-btn{width:60px;height:60px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);color:white;font-size:9px;letter-spacing:1px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:1px;pointer-events:all;-webkit-tap-highlight-color:transparent;}
-.mob-btn span{font-size:20px;line-height:1;}
-#look-joystick-zone{position:absolute;bottom:16px;right:14px;width:130px;height:130px;pointer-events:all;}
-#look-joystick-base{width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);}
-#look-joystick-nub{position:absolute;top:40px;left:40px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.2);}
+#mobile-controls{position:fixed;bottom:0;left:0;right:0;z-index:20;pointer-events:none;display:none;height:220px;}
+#joystick-zone{position:absolute;bottom:20px;left:10px;width:140px;height:140px;pointer-events:all;z-index:21;}
+#joystick-base{width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);}
+#joystick-nub{position:absolute;top:45px;left:45px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.4);}
+/* Look joystick on the right — buttons orbit around it */
+#look-joystick-zone{position:absolute;bottom:40px;right:10px;width:140px;height:140px;pointer-events:all;z-index:21;}
+#look-joystick-base{width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);}
+#look-joystick-nub{position:absolute;top:45px;left:45px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.4);}
+/* Action buttons orbit the look joystick like a thumb cluster */
+#mob-fire  {position:absolute;right:18px; bottom:185px;pointer-events:all;}
+#mob-special{position:absolute;right:130px;bottom:155px;pointer-events:all;}
+#mob-dodge {position:absolute;right:18px; bottom:20px; pointer-events:all;}
+.mob-btn{width:58px;height:58px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);background:rgba(0,0,0,0.6);color:white;font-size:9px;letter-spacing:1px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:1px;-webkit-tap-highlight-color:transparent;z-index:22;}
+.mob-btn .mob-icon{font-size:22px;line-height:1;}
+#mob-fire  {border-color:rgba(255,200,100,0.4);}
+#mob-special{border-color:rgba(200,150,255,0.4);}
+#mob-dodge {border-color:rgba(100,200,255,0.4);}
 </style>
 </head>
 <body>
@@ -176,11 +186,9 @@ body{background:#050308;overflow:hidden;font-family:'Courier New',monospace;user
 
 <div id="mobile-controls">
   <div id="joystick-zone"><div id="joystick-base"></div><div id="joystick-nub"></div></div>
-  <div id="mobile-btns" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:row;gap:14px;pointer-events:all;align-items:center;">
-    <div class="mob-btn" id="mob-special"><span>★</span><small>SPEC</small></div>
-    <div class="mob-btn" id="mob-fire"><span>◎</span><small>BEND</small></div>
-    <div class="mob-btn" id="mob-dodge"><span>↷</span><small>DODGE</small></div>
-  </div>
+  <div class="mob-btn" id="mob-fire">  <span class="mob-icon">◎</span><small>FIRE</small></div>
+  <div class="mob-btn" id="mob-special"><span class="mob-icon">★</span><small>SPEC</small></div>
+  <div class="mob-btn" id="mob-dodge"> <span class="mob-icon">↷</span><small>DODGE</small></div>
   <div id="look-joystick-zone"><div id="look-joystick-base"></div><div id="look-joystick-nub"></div></div>
 </div>
 
@@ -780,6 +788,7 @@ function showHeroSelect(){
   if(locked&&document.exitPointerLock) document.exitPointerLock(); locked=false;
   cancelAnimationFrame(animFrame);
   document.getElementById('mobile-controls').style.display='none';
+  document.body.classList.remove('is-mobile');
   document.getElementById('boss-bar').style.display='none';
 }
 
@@ -806,7 +815,7 @@ let betweenWave=false;
 let waveStartTimer=0; // grace period after wave starts to prevent instant wave-end
 let joystickActive=false,joystickBase={x:0,y:0},joystickDelta={x:0,y:0},joystickTouchId=-1;
 let lookJoystickActive=false,lookJoystickBase={x:0,y:0},lookJoystickDelta={x:0,y:0},lookJoystickTouchId=-1;
-let aimTouchId=null,aimLastX=0,aimLastY=0,mobileAimActive=false;
+let aimTouchId=null,mobileAimActive=false;
 let lastTime=0;
 let upgrades={maxHp:0,damage:0,speed:0,chiMax:0,dodgeSpeed:0,chiRegen:0};
 const isMobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||('ontouchstart' in window);
@@ -943,7 +952,7 @@ function startGame(){
   updateElementHUD();
   gameState='playing';
   if(!isMobile) canvas.requestPointerLock?.();
-  if(isMobile) document.getElementById('mobile-controls').style.display='block';
+  if(isMobile){document.getElementById('mobile-controls').style.display='block';document.body.classList.add('is-mobile');}
   startNextWave();
   lastTime=performance.now();
   animFrame=requestAnimationFrame(loop);
@@ -1075,8 +1084,11 @@ function startNextWave(){
       if(wave>=15) pool.push(ENEMY_TYPES[1],ENEMY_TYPES[3]);
       type=pool[Math.floor(Math.random()*pool.length)];
     }
-    const ang=(i/count)*Math.PI*2+Math.random()*0.5;
-    const dist=250+Math.random()*200;
+    // Spawn in forward-biased arc: first 3 enemies directly ahead, rest ring around
+    const playerYaw = player ? player.yaw : 0;
+    const baseAng = (i/count)*Math.PI*2;
+    const ang = i<3 ? (playerYaw + (i-1)*0.7 + Math.PI*0.0) : baseAng + Math.random()*0.4;
+    const dist=180+Math.random()*200;
     const hpScale=1+wave*0.08;
     enemies.push(makeEnemy(type,ang,dist,hpScale,isMidBoss&&i===0?3:1));
   }
@@ -1084,8 +1096,9 @@ function startNextWave(){
 }
 
 function makeEnemy(type,angle,dist,hpScale,bossMult=1){
+  const px=player?player.x:0, pz=player?player.z:0;
   return{
-    x:Math.cos(angle)*dist,z:Math.sin(angle)*dist,y:0,
+    x:px+Math.cos(angle)*dist,z:pz+Math.sin(angle)*dist,y:0,
     hp:type.hp*hpScale*bossMult,maxHp:type.hp*hpScale*bossMult,
     speed:type.speed*(1+wave*0.02),dmg:type.dmg*(1+wave*0.05),
     color:type.color,size:type.size,score:type.score,
@@ -1798,13 +1811,13 @@ function render(){
   for(let i=0;i<20;i++){const d=(i+1)*80,sy=horizonY+d*0.4;if(sy>H)break;const pw=W*(1+d*0.005);ctx.beginPath();ctx.moveTo(W/2-pw/2,sy);ctx.lineTo(W/2+pw/2,sy);ctx.stroke();}
   if(env.fogColor){const fg=ctx.createLinearGradient(0,horizonY,0,H);fg.addColorStop(0,'transparent');fg.addColorStop(1,env.fogColor+'cc');ctx.fillStyle=fg;ctx.fillRect(0,horizonY,W,H-horizonY);}
 
-  // Projection — corrected FOV and scale
+  // World-to-screen projection
   function worldToScreen(wx,wz,wy=0){
     const dx=wx-player.x,dz=wz-player.z;
     const cos=Math.cos(-player.yaw),sin=Math.sin(-player.yaw);
     const rx=dx*cos-dz*sin,rz=dx*sin+dz*cos;
-    if(rz<=0.1) return null;
-    const fov=0.9;
+    if(rz<=1) return null; // must be in front of camera
+    const fov=1.2;
     const sx=W/2+(rx/rz)*W/fov;
     const sy=horizonY-(wy/rz)*W/fov+(pitchAngle*W/rz)*0.3;
     const scale=W/(rz*fov);
@@ -1908,9 +1921,10 @@ function render(){
   sortedEn.forEach(en=>{
     if(en.hp<=0) return;
     const s=worldToScreen(en.x,en.z,0);
-    if(!s||s.rz>1400) return;
-    const bs=Math.max(4, 40*en.size*s.scale*0.4);
-    if(bs<1) return;
+    if(!s||s.rz>900) return;
+    // Clamp size: never let enemies be invisible even at edge of range
+    const bs=Math.max(6, 40*en.size*s.scale*0.4);
+    if(s.sx<-bs*3||s.sx>W+bs*3) return; // off-screen horizontal cull only
     const bx=s.sx,by=s.sy;
     const envMix=en.envTint;
     const baseColor=en.hitFlash>0?'#ffffff':en.color;
@@ -2040,8 +2054,8 @@ function render(){
   // Projectiles
   projectiles.forEach(p=>{
     const s=worldToScreen(p.x,p.z,p.y);
-    if(!s||s.rz>1600) return;
-    const sz=p.size*s.scale*0.5;if(sz<0.5) return;
+    if(!s||s.rz>1200) return;
+    const sz=p.size*s.scale*0.5;if(sz<1) return;
     if(p.player){
       ctx.shadowColor=p.color;ctx.shadowBlur=sz*4;
       ctx.beginPath();ctx.moveTo(s.sx,s.sy-sz*2);ctx.lineTo(s.sx+sz,s.sy);ctx.lineTo(s.sx,s.sy+sz*2);ctx.lineTo(s.sx-sz,s.sy);ctx.closePath();
