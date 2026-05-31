@@ -144,7 +144,10 @@ body{background:#050308;overflow:hidden;font-family:'Courier New',monospace;user
 #mobile-btns{position:absolute;bottom:20px;right:20px;display:flex;flex-direction:column;gap:10px;pointer-events:all;}
 .mob-btn{width:64px;height:64px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:white;font-size:10px;letter-spacing:1px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:2px;pointer-events:all;}
 .mob-btn span{font-size:18px;line-height:1;}
-#aim-zone{position:absolute;top:0;right:0;bottom:150px;left:130px;pointer-events:all;}
+#aim-zone{position:absolute;top:0;right:170px;bottom:150px;left:130px;pointer-events:all;}
+#look-joystick-zone{position:absolute;bottom:20px;right:20px;width:130px;height:130px;pointer-events:all;}
+#look-joystick-base{width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);}
+#look-joystick-nub{position:absolute;top:50%;left:50%;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.2);transform:translate(-50%,-50%);}
 </style>
 </head>
 <body>
@@ -177,11 +180,12 @@ body{background:#050308;overflow:hidden;font-family:'Courier New',monospace;user
 <div id="mobile-controls">
   <div id="aim-zone"></div>
   <div id="joystick-zone"><div id="joystick-base"></div><div id="joystick-nub"></div></div>
-  <div id="mobile-btns">
+  <div id="mobile-btns" style="position:absolute;bottom:160px;right:20px;display:flex;flex-direction:column;gap:10px;pointer-events:all;">
     <div class="mob-btn" id="mob-special"><span>★</span><small>SPEC</small></div>
     <div class="mob-btn" id="mob-fire"><span>◎</span><small>BEND</small></div>
     <div class="mob-btn" id="mob-dodge"><span>↷</span><small>DODGE</small></div>
   </div>
+  <div id="look-joystick-zone"><div id="look-joystick-base"></div><div id="look-joystick-nub"></div></div>
 </div>
 
 <div id="upgrade-overlay">
@@ -803,7 +807,9 @@ let chargeTime=0,isCharging=false;
 let chiAmount=100,chiMax=100,chiRegen=0.15;
 let specialCooldown=0,specialMax=8000;
 let betweenWave=false;
+let waveStartTimer=0; // grace period after wave starts to prevent instant wave-end
 let joystickActive=false,joystickBase={x:0,y:0},joystickDelta={x:0,y:0};
+let lookJoystickActive=false,lookJoystickBase={x:0,y:0},lookJoystickDelta={x:0,y:0};
 let aimTouchId=null,aimLastX=0,aimLastY=0,mobileAimActive=false;
 let lastTime=0;
 let upgrades={maxHp:0,damage:0,speed:0,chiMax:0,dodgeSpeed:0,chiRegen:0};
@@ -904,7 +910,7 @@ function startGame(){
   const h=HEROES.find(x=>x.id===selectedHeroId)||HEROES[0];
   currentHero=h;
   const sb=getSkillBonuses();
-  score=0;wave=0;enemies=[];projectiles=[];particles=[];floatingTexts=[];shards=[];dodgeTraps=[];
+  score=0;wave=0;enemies=[];projectiles=[];particles=[];floatingTexts=[];shards=[];dodgeTraps=[];waveStartTimer=0;
   upgrades={maxHp:0,damage:0,speed:0,chiMax:0,dodgeSpeed:0,chiRegen:0};
   darkAvatarBoss=null;daPhase=0;daTransitioning=false;daSummonTimer=0;
   isCorrupted=false;corruptTimer=0;
@@ -1039,7 +1045,7 @@ function renderHands(){
 function waveEnemyCount(w){return Math.min(5+Math.floor(w*1.5),28);}
 
 function startNextWave(){
-  wave++;betweenWave=false;
+  wave++;betweenWave=false;waveStartTimer=800;
   setEnvironment(getEnvForWave(wave),true);
   enemies=[];darkAvatarBoss=null;dodgeTraps=[];
 
@@ -1184,6 +1190,16 @@ joyZone.addEventListener('touchmove',e=>{
   joyNub.style.left=(65+Math.cos(ang)*cd)+'px';joyNub.style.top=(65+Math.sin(ang)*cd)+'px';
 },{passive:false});
 joyZone.addEventListener('touchend',()=>{joystickActive=false;joystickDelta={x:0,y:0};joyNub.style.left='40px';joyNub.style.top='40px';});
+const lookJoyZone=document.getElementById('look-joystick-zone'),lookJoyNub=document.getElementById('look-joystick-nub');
+lookJoyZone.addEventListener('touchstart',e=>{e.preventDefault();const r=lookJoyZone.getBoundingClientRect();lookJoystickBase={x:r.left+r.width/2,y:r.top+r.height/2};lookJoystickActive=true;},{passive:false});
+lookJoyZone.addEventListener('touchmove',e=>{
+  e.preventDefault();if(!lookJoystickActive) return;
+  const t=e.touches[0],dx=t.clientX-lookJoystickBase.x,dy=t.clientY-lookJoystickBase.y;
+  const dist=Math.sqrt(dx*dx+dy*dy),maxR=50,cd=Math.min(dist,maxR),ang=Math.atan2(dy,dx);
+  lookJoystickDelta={x:Math.cos(ang)*cd/maxR,y:Math.sin(ang)*cd/maxR};
+  lookJoyNub.style.left=(65+Math.cos(ang)*cd)+'px';lookJoyNub.style.top=(65+Math.sin(ang)*cd)+'px';
+},{passive:false});
+lookJoyZone.addEventListener('touchend',()=>{lookJoystickActive=false;lookJoystickDelta={x:0,y:0};lookJoyNub.style.left='40px';lookJoyNub.style.top='40px';});
 aimZone.addEventListener('touchstart',e=>{for(let t of e.changedTouches){if(aimTouchId===null){aimTouchId=t.identifier;aimLastX=t.clientX;aimLastY=t.clientY;mobileAimActive=true;}}},{passive:false});
 aimZone.addEventListener('touchmove',e=>{e.preventDefault();for(let t of e.changedTouches){if(t.identifier===aimTouchId){player.yaw+=(t.clientX-aimLastX)*0.004;pitchAngle=Math.max(-0.6,Math.min(0.6,pitchAngle+(t.clientY-aimLastY)*0.004));aimLastX=t.clientX;aimLastY=t.clientY;}}},{passive:false});
 aimZone.addEventListener('touchend',e=>{for(let t of e.changedTouches)if(t.identifier===aimTouchId){aimTouchId=null;mobileAimActive=false;}});
@@ -1547,6 +1563,12 @@ function update(dt){
   if(specialCooldown>0) specialCooldown-=dt;
   if(isCharging) chargeTime+=dt;
 
+  // Look joystick (mobile)
+  if(lookJoystickActive&&gameState==='playing'){
+    player.yaw+=lookJoystickDelta.x*0.04*(dt/16);
+    pitchAngle=Math.max(-0.6,Math.min(0.6,pitchAngle+lookJoystickDelta.y*0.03*(dt/16)));
+  }
+
   // Corruption
   if(isCorrupted){
     corruptTimer-=dt;
@@ -1712,8 +1734,9 @@ function update(dt){
   floatingTexts=floatingTexts.filter(ft=>{ft.y+=ft.vy*(dt/16);ft.life-=dt/16;return ft.life>0;});
 
   // Wave complete
+  if(waveStartTimer>0) waveStartTimer-=dt;
   const alive=enemies.filter(e=>e.hp>0).length+(darkAvatarBoss&&!darkAvatarBoss.dead?1:0);
-  if(alive===0&&!betweenWave){
+  if(alive===0&&!betweenWave&&waveStartTimer<=0){
     betweenWave=true;
     if(wave>=maxWaves) setTimeout(()=>showWin(),1500);
     else setTimeout(()=>showUpgradeMenu(()=>setTimeout(()=>startNextWave(),300)),1200);
