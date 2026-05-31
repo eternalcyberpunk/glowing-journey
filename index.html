@@ -813,7 +813,7 @@ let lookJoystickActive=false,lookJoystickBase={x:0,y:0},lookJoystickDelta={x:0,y
 let aimTouchId=null,aimLastX=0,aimLastY=0,mobileAimActive=false;
 let lastTime=0;
 let upgrades={maxHp:0,damage:0,speed:0,chiMax:0,dodgeSpeed:0,chiRegen:0};
-let isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent)||window.innerWidth<700;
+const isMobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||('ontouchstart' in window);
 
 // Passive state
 let passiveHitCount=0;
@@ -897,11 +897,24 @@ const SPIRIT_MINION={id:'spiritMinion',name:'SPIRIT MINION',hp:35,speed:3.0,dmg:
 // RESIZE & INIT
 // ══════════════════════════════════════════
 function resize(){
-  W=canvas.width=window.innerWidth;
-  H=canvas.height=window.innerHeight;
-  fpCanvas.width=W; fpCanvas.height=200;
+  const vw=window.visualViewport?window.visualViewport.width:window.innerWidth;
+  const vh=window.visualViewport?window.visualViewport.height:window.innerHeight;
+  W=canvas.width=Math.round(vw);
+  H=canvas.height=Math.round(vh);
+  fpCanvas.width=W;fpCanvas.height=200;
+  // Force redraw after canvas reset
+  if(gameState==='playing') render();
 }
-window.addEventListener('resize',resize); resize();
+let _resizeTimer=null;
+function onResize(){
+  clearTimeout(_resizeTimer);
+  resize();
+  _resizeTimer=setTimeout(resize,200);
+}
+window.addEventListener('resize',onResize);
+if(window.visualViewport) window.visualViewport.addEventListener('resize',onResize);
+window.addEventListener('orientationchange',()=>{clearTimeout(_resizeTimer);_resizeTimer=setTimeout(resize,350);});
+resize();
 
 // ══════════════════════════════════════════
 // START GAME
