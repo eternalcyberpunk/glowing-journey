@@ -902,8 +902,8 @@ function resize(){
   W=canvas.width=Math.round(vw);
   H=canvas.height=Math.round(vh);
   fpCanvas.width=W;fpCanvas.height=200;
-  // Force redraw after canvas reset
-  if(gameState==='playing') render();
+  // Reset lastTime so the next frame doesn't get a huge dt spike
+  lastTime=performance.now();
 }
 let _resizeTimer=null;
 function onResize(){
@@ -1558,7 +1558,7 @@ function showWin(){
 function loop(ts){
   if(gameState!=='playing') return;
   const dt=Math.min(ts-lastTime,50);lastTime=ts;
-  update(dt);render();
+  try{update(dt);render();}catch(e){console.warn('loop err:',e);}
   animFrame=requestAnimationFrame(loop);
 }
 
@@ -1566,7 +1566,7 @@ function loop(ts){
 // UPDATE
 // ══════════════════════════════════════════
 function update(dt){
-  if(gameState!=='playing') return;
+  if(gameState!=='playing'||!player) return;
   const h=currentHero,sb=getSkillBonuses();
   const speedMult=1+upgrades.speed*0.2+(player.speedBoost?0.3:0);
   const baseSpeed=3*speedMult*(h.dodge||1);
@@ -1761,6 +1761,7 @@ function update(dt){
 // RENDER
 // ══════════════════════════════════════════
 function render(){
+  if(!player||!currentHero) return;
   const env=ENVIRONMENTS[currentEnv],h=currentHero;
   ctx.clearRect(0,0,W,H);
   const horizonY=H*0.5+pitchAngle*H*0.6;
